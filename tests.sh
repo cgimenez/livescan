@@ -1,0 +1,1 @@
+ls *.go | ~/entr -r go test
