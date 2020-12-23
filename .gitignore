@@ -2,3 +2,5 @@ misc
 .DS*
 *.code-workspace
 livescan
+bin
+

@@ -1,1 +1,1 @@
-ls *.go | ~/entr -r go test
+ls *.go | ~/entr -c -r go test

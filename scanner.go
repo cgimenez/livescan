@@ -49,6 +49,7 @@ func (sc *scanResult) walk() error {
 
 	err := filepath.Walk(sc.rootPath,
 		func(path string, info os.FileInfo, err error) error {
+			path, _ = filepath.Abs(path)
 			if err != nil {
 				return err
 			}
@@ -63,20 +64,24 @@ func (sc *scanResult) walk() error {
 	return err
 }
 
-func (sc *scanResult) scan(displayFn func(string)) error {
+func (sc *scanResult) scan(channel chan string) error {
+	var err error
+	var content string
+
 	for _, file := range sc.liveFiles {
-		if displayFn != nil {
-			displayFn(fmt.Sprintf("Scanning file %s", file.pathname))
-		}
-		content, err := file.gUnZipFile()
-		if err != nil && displayFn != nil {
-			displayFn(fmt.Sprintf("File skipped - Error %s", err))
-		}
-		err = file.analyzeFileRefs(sc, content)
+		channel <- fmt.Sprintf("Scanning file %s", file.pathname)
+		content, err = file.gUnZipFile()
 		if err != nil {
-			return err
+			channel <- fmt.Sprintf("File skipped - Error %s", err)
+		} else {
+			err = file.analyzeFileRefs(sc, content)
+			if err != nil {
+				close(channel)
+				return err
+			}
 		}
 	}
+	close(channel)
 	return nil
 }
 
@@ -107,15 +112,30 @@ func buildFileRefDir(lifefile_pathname string, sample_filename string, hasRelati
 	var dir string
 
 	if hasRelativePath {
+		dir = filepath.Dir(lifefile_pathname)
 	} else {
-		dir = lifefile_pathname
-		for _, d := range directories {
-			dir += "/" + d
-		}
-		dir += "/" + sample_filename
+		dir = "/"
 	}
+	for _, d := range directories {
+		if d == "" {
+			d = ".."
+		}
+		dir = filepath.Join(dir, d)
+	}
+	dir, _ = filepath.Abs(filepath.Join(dir, sample_filename))
 
 	return dir
+}
+
+func getPathElements(fileRef *xmlquery.Node, xpath string) []string {
+	var dirs []string
+	for _, relPathElement := range xmlquery.Find(fileRef, xpath) {
+		d := relPathElement.SelectAttr("Dir")
+		//if len(d) > 0 {
+		dirs = append(dirs, d)
+		//}
+	}
+	return dirs
 }
 
 func (livefile *liveFile) analyzeFileRefs(sc *scanResult, content string) error {
@@ -124,52 +144,35 @@ func (livefile *liveFile) analyzeFileRefs(sc *scanResult, content string) error 
 		return err
 	}
 
-	for _, ref := range xmlquery.Find(doc, "//SampleRef//FileRef") {
-		var rebuilt_pathname string
+	for _, fileRef := range xmlquery.Find(doc, "//SampleRef//FileRef") {
+		sample_filename := xmlquery.Find(fileRef, "//Name")[0].SelectAttr("Value")
+		hasRelativePath := xmlquery.Find(fileRef, "//HasRelativePath")[0].SelectAttr("Value") == "true"
+		relativePathType := xmlquery.Find(fileRef, "//RelativePathType")[0].SelectAttr("Value")
 
-		name := xmlquery.Find(ref, "//Name")[0].SelectAttr("Value")
-		//fmt.Println("New ref for", name)
-
-		hasRelativePath := xmlquery.Find(ref, "//HasRelativePath")[0].SelectAttr("Value") == "true"
-		//relativePathType := xmlquery.Find(ref, "//RelativePathType")[0].SelectAttr("Value")
+		var dirs []string
 		if hasRelativePath {
-			rebuilt_pathname = filepath.Dir(livefile.pathname)
-			for _, relPathElement := range xmlquery.Find(ref, "//RelativePath//RelativePathElement") {
-				if relPathElement.SelectAttr("Dir") != "" {
-					rebuilt_pathname += "/" + relPathElement.SelectAttr("Dir")
-				} else {
-					rebuilt_pathname += "/.."
-				}
-			}
-		} else {
-			for _, relPathElement := range xmlquery.Find(ref, "//SearchHint//PathHint//RelativePathElement") {
-				rebuilt_pathname += "/" + relPathElement.SelectAttr("Dir")
-			}
+			dirs = getPathElements(fileRef, "//RelativePath//RelativePathElement")
 		}
-		rebuilt_pathname += "/" + filepath.Base(name)
-		audiofile, ok := sc.audioFiles[rebuilt_pathname]
+		if !hasRelativePath || len(dirs) == 0 {
+			if len(dirs) == 0 {
+				hasRelativePath = false
+			}
+			dirs = getPathElements(fileRef, "//SearchHint//PathHint//RelativePathElement")
+		}
+
+		audiofile_path := buildFileRefDir(livefile.pathname, sample_filename, hasRelativePath, relativePathType, dirs)
+		if livefile.pathname == "testdata/live-9-p1 Project/live-9-p1-with-external-refs.als" {
+			fmt.Println(dirs, audiofile_path)
+		}
+		audiofile, ok := sc.audioFiles[audiofile_path]
+		//fmt.Println("dir is", ok, audiofile_path)
 		if ok {
 			audiofile.refs = append(audiofile.refs, livefile)
 			livefile.refs = append(livefile.refs, audiofile)
 		} else {
-			//fmt.Printf("add orphan %s to %s\n", rebuilt_pathname, livefile.pathname)
-			livefile.orphans = append(livefile.orphans, rebuilt_pathname)
+			//fmt.Printf("Orphan %s added to %s\n", audiofile_path, livefile.pathname)
+			livefile.orphans = append(livefile.orphans, audiofile_path)
 		}
 	}
 	return nil
-}
-
-// From https://yourbasic.org/golang/formatting-byte-size-to-human-readable-format/
-func ByteCountSI(b int64) string {
-	const unit = 1000
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB",
-		float64(b)/float64(div), "kMGTPE"[exp])
 }

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"testing"
@@ -22,10 +22,11 @@ const l10_p1 = "testdata/live-10-p1 Project/live-10-p1-with-external-refs.als"
 const l10_p2 = "testdata/live-10-p2 Project/live-10-p2-wo-external-refs.als"
 
 const an_audio_file = "testdata/an_audio_file.wav"
-const l9_p1_orphan = "/User/chris/Desktop/s1.wav"
+const l9_p1_orphan = "/Users/chris/Desktop/s1.wav"
 const l9_p2_orphan = "testdata/live-9-p2 Project/Samples/Imported/orphan.wav"
 const l9_p2_s1 = "testdata/live-9-p2 Project/Samples/Imported/s1.wav"
 const l9_p2_recorded = "testdata/live-9-p2 Project/Samples/Recorded/0001 1-Audio.aif"
+const l10_p1_orphan = "/Users/chris/Desktop/s1.wav"
 const l10_p2_orphan = "testdata/live-10-p2 Project/Samples/Imported/orphan.wav"
 const l10_p2_s1 = "testdata/live-10-p2 Project/Samples/Imported/s1.wav"
 const l10_p2_recorded = "testdata/live-10-p2 Project/Samples/Recorded/1-s1 0001 [2020-12-21 132329].aif"
@@ -91,7 +92,7 @@ func assertAudioFileOwned(t *testing.T, a *audioFile, l *liveFile) {
 		}
 	}
 	if !found {
-		t.Errorf("Expected audiofile %s to be own by livefile %s", a.pathname, l.pathname)
+		t.Errorf("Expected audiofile %s to be owned by livefile %s - line %d", a.pathname, l.pathname, callingLine())
 	}
 }
 
@@ -109,15 +110,19 @@ func setup(t *testing.T) {
 		log.Fatal(err)
 	}
 
+	for i := range projectFileNames {
+		fabs, _ := filepath.Abs(projectFileNames[i])
+		projectFileNames[i] = fabs
+	}
+
+	for i := range audioFileNames {
+		if !filepath.IsAbs(audioFileNames[i]) {
+			fabs, _ := filepath.Abs(audioFileNames[i])
+			audioFileNames[i] = fabs
+		}
+	}
+
 	scr = newScanResult("./testdata")
-	err = scr.walk()
-	if err != nil {
-		t.Error(err)
-	}
-	err = scr.scan(nil)
-	if err != nil {
-		t.Error(err)
-	}
 }
 
 func teardown() {
@@ -126,6 +131,15 @@ func teardown() {
 func TestScanRoot(t *testing.T) {
 	t.Run("Scanned files must be found", func(t *testing.T) {
 		setup(t)
+
+		err := scr.walk()
+		if err != nil {
+			t.Error(err)
+		}
+		err = scr.scan(make(chan string, 100))
+		if err != nil {
+			t.Error(err)
+		}
 
 		for k := range scr.audioFiles {
 			found := array_contains(audioFileNames[:], k)
@@ -149,31 +163,30 @@ func TestScanRoot(t *testing.T) {
 func TestFileRefs(t *testing.T) {
 	setup(t)
 
-	expected_f := []string{l9_p1, l9_p2, l10_p1, l10_p2}
+	err := scr.walk()
+	if err != nil {
+		t.Error(err)
+	}
 
-	for index := 0; index < len(expected_f); index++ {
-		livefile := scr.liveFiles[expected_f[index]]
+	err = scr.scan(make(chan string, 100))
+	if err != nil {
+		t.Error(err)
+	}
 
-		content, err := livefile.gUnZipFile()
-		if err != nil {
-			t.Error(err)
-		}
+	for _, projectFileName := range projectFileNames {
+		livefile := scr.liveFiles[projectFileName]
 
-		err = livefile.analyzeFileRefs(scr, content)
-		if err != nil {
-			t.Error(err)
-		}
-
-		switch expected_f[index] {
+		switch projectFileName {
 		case l9_p1:
-			assert_equal(t, 0, len(livefile.refs)) // No samples
-			fmt.Println(livefile.orphans)
+			assert_equal(t, 2, len(livefile.orphans))
 			assert_array_contains(t, livefile.orphans, l9_p1_orphan)
+			assertAudioFileOwned(t, scr.audioFiles[l9_p2_s1], livefile)
 		case l9_p2:
 			assertAudioFileOwned(t, scr.audioFiles[l9_p2_s1], livefile)
 			assertAudioFileOwned(t, scr.audioFiles[l9_p2_recorded], livefile)
 		case l10_p1:
 			assert_equal(t, 0, len(livefile.refs)) // No samples
+			assert_array_contains(t, livefile.orphans, l10_p1_orphan)
 		case l10_p2:
 			assertAudioFileOwned(t, scr.audioFiles[l10_p2_s1], livefile)
 			assertAudioFileOwned(t, scr.audioFiles[l10_p2_recorded], livefile)
@@ -184,8 +197,10 @@ func TestFileRefs(t *testing.T) {
 
 func TestBuildFileRefDir(t *testing.T) {
 	dirs := []string{"foo", "bar", "joe"}
-	dir := buildFileRefDir("/usr/local/projects/project1", "sample1.wav", false, "", dirs)
-	println(dir)
+	dir := buildFileRefDir("/usr/local/projects/project1/project1.als", "sample1.wav", false, "", dirs)
+	assert_equal(t, "/foo/bar/joe/sample1.wav", dir)
+
+	dir = buildFileRefDir("/usr/local/projects/project1/project1.als", "sample1.wav", true, "", dirs)
 	assert_equal(t, "/usr/local/projects/project1/foo/bar/joe/sample1.wav", dir)
 }
 

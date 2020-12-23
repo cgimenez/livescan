@@ -6,39 +6,34 @@ import (
 	"log"
 )
 
-const rootPathName string = "/Volumes/Work1/Musique/2019-Curated-2"
-
-func displayMsg(msg string) {
-	log.Println(msg)
-}
+const rootPathName string = "/Volumes/Work1/Musique/Génériques Pour la Nouvelle Télévision/Compos"
 
 func startScan() {
 	sc := newScanResult(rootPathName)
+
+	log.Println("Finding files")
 	err := sc.walk()
 	if err != nil {
 		panic(err)
 	}
 
-	if err = sc.scan(displayMsg); err != nil {
-		panic(err)
-	}
+	ch := make(chan string, 100)
+	go func() {
+		if err = sc.scan(ch); err != nil {
+			panic(err)
+		}
+	}()
 
-	log.Println("Orphan audio files")
-	var sz int64
-	for _, audioFile := range sc.audioFiles {
-		if len(audioFile.refs) == 0 {
-			log.Printf(audioFile.pathname)
-			sz += audioFile.size
+	done := false
+	for !done {
+		msg, more := <-ch
+		if more {
+			log.Println(msg)
+		} else {
+			fmt.Println("Scan done")
+			done = true
 		}
 	}
-
-	fmt.Printf("Size to clean %s\n", ByteCountSI(sz))
-
-	/*for _, liveFile := range files.liveFiles {
-		if len(liveFile.refs) == 0 {
-			log.Printf(liveFile.pathname)
-		}
-	}*/
 }
 
 func main() {
