@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-const rootPathName string = "/Volumes/Work1/Musique/Génériques Pour la Nouvelle Télévision/Compos"
+const rootPathName string = "/Volumes/Work1/Musique/Génériques Pour la Nouvelle Télévision/Compos/Bloc 4"
 
 func startScan() {
 	sc := newScanResult(rootPathName)

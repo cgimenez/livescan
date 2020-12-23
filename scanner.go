@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/antchfx/xmlquery"
@@ -41,17 +42,34 @@ func newScanResult(rootPath string) *scanResult {
 	return sc
 }
 
+func isIcon(filename string) bool {
+	var a = [...]byte{73, 99, 111, 110, 13}
+	var b = []byte(filename)
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (sc *scanResult) walk() error {
 
 	if sc.rootPath == "" {
 		return errors.New("rootPath is not set")
 	}
 
+	if runtime.GOOS == "windows" {
+		sc.rootPath = "Z:" + sc.rootPath
+	}
+
 	err := filepath.Walk(sc.rootPath,
 		func(path string, info os.FileInfo, err error) error {
 			path, _ = filepath.Abs(path)
-			if err != nil {
-				return err
+			base := filepath.Base(path)
+			if err != nil && !isIcon(base) { // Icon? files cause problems under Windows
+				return fmt.Errorf("name %s: %v", base, err)
 			}
 			switch filepath.Ext(path) {
 			case ".aif", ".wav", ".mp3":

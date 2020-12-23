@@ -1,0 +1,14 @@
+sudo port install mingw-w64
+
+ i686-w64-mingw32-gcc has the following notes:
+    If you want your MinGW-generated windows binaries to work under wine out-of-the-box
+    (and they are not statically linked), you can instruct wine
+    to automatically search for dll-s by running:
+        wine regedit
+    Nagivate to:
+        [HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment]
+    or
+        [HKEY_CURRENT_USER\Environment]
+    and add
+        Z:\opt\local\i686-w64-mingw32\bin
+    to the 'PATH' variable.

@@ -16,7 +16,7 @@ var (
 
 func loadFont() {
 	fonts := giu.Context.IO().Fonts()
-	font = fonts.AddFontFromFileTTF("./arial.ttf", 13)
+	font = fonts.AddFontFromFileTTF("assets/arial.ttf", 13)
 }
 
 func onOpenFolder() {
@@ -31,7 +31,7 @@ func onStartScan() {
 		messages = make([]string, 0)
 		sc := newScanResult(rootPathName)
 
-		messages = append(messages, "Finding files...")
+		messages = append(messages, "Finding files...à la tête de nël")
 		err := sc.walk()
 		if err != nil {
 			panic(err)
