@@ -6,18 +6,16 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 
 	"github.com/AllenDang/giu"
 )
 
 type LiveFile struct {
-	pathname string
-	refs     []*AudioFile
-	orphans  []string
-	missing  []string
-	librefs  []string
+	pathname     string
+	refs         []*AudioFile
+	externalrefs []string
+	missing      []string
 }
 
 type AudioFile struct {
@@ -69,10 +67,6 @@ func (scanResult *ScanResult) walk() error {
 		return errors.New("rootPath is not set")
 	}
 
-	if runtime.GOOS == "windows" {
-		scanResult.rootPath = "Z:" + scanResult.rootPath
-	}
-
 	err := filepath.Walk(scanResult.rootPath,
 		func(path string, info os.FileInfo, err error) error {
 			path, _ = filepath.Abs(path)
@@ -84,7 +78,7 @@ func (scanResult *ScanResult) walk() error {
 			case ".aif", ".wav", ".mp3":
 				scanResult.audioFiles[path] = &AudioFile{path, info.Size(), make([]*LiveFile, 0)}
 			case ".als":
-				scanResult.liveFiles[path] = &LiveFile{path, make([]*AudioFile, 0), make([]string, 0), make([]string, 0), make([]string, 0)}
+				scanResult.liveFiles[path] = &LiveFile{path, make([]*AudioFile, 0), make([]string, 0), make([]string, 0)}
 			}
 			return nil
 		})
@@ -114,7 +108,6 @@ func (scanResult *ScanResult) scan(channel chan string) error {
 }
 
 func startScan(uiMode int) {
-	appCtx.scanRootPath = rootPathName
 	appCtx.libRootPath = "/Volumes/Work1/Musique/Sound banks/Packs Live"
 	appCtx.messages = make([]string, 0)
 	appCtx.scanResult = newScanResult(appCtx.scanRootPath)

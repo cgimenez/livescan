@@ -6,7 +6,7 @@ import (
 	imgui "github.com/AllenDang/giu/imgui"
 )
 
-const rootPathName string = "/Volumes/Work1/Musique/2020"
+const rootPathName string = "/Volumes/Work1/Musique/2020/Western Project/"
 
 const (
 	IDLE = iota
@@ -41,6 +41,7 @@ func (ctx *AppCtx) scanStatusToString() string {
 var appCtx AppCtx
 
 func main() {
+	appCtx.scanRootPath = rootPathName
 	noGUI := flag.Bool("no-gui", false, "disable GUI")
 	flag.Parse()
 

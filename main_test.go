@@ -175,8 +175,8 @@ func TestFileRefs(t *testing.T) {
 
 		switch projectFileName {
 		case l9_p1:
-			assert_equal(t, 1, len(livefile.refs))
-			assertAudioFileOwned(t, scr, l9_p2_s1, projectFileName)
+			assert_equal(t, 0, len(livefile.refs))
+			assert_array_contains(t, livefile.externalrefs, l9_p1_orphan)
 		case l9_p2:
 			assert_equal(t, 2, len(livefile.refs))
 			assertAudioFileOwned(t, scr, l9_p2_s1, projectFileName)

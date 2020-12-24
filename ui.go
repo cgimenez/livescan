@@ -107,10 +107,10 @@ func displayLiveProjects() {
 						//g.Label(ref.pathname)
 					}
 					for _, missing := range liveFile.missing {
-						imgui.Text("Missing: " + missing)
+						imgui.Text("Missing : " + missing)
 					}
-					for _, libref := range liveFile.librefs {
-						imgui.Text("Library: " + libref)
+					for _, libref := range liveFile.externalrefs {
+						imgui.Text("External : " + libref)
 					}
 				}),
 				//g.Label(liveFile.pathname),

@@ -1,5 +1,6 @@
 github.com/AllenDang/giu v0.4.2 h1:kQrC2odWeJZhyZ+AX5AblWanG8RQZCeS6oUPzI4zJg0=
 github.com/AllenDang/giu v0.4.2/go.mod h1:CVqj0JxKHr+rKLJ/XH2Jp+H/tdI9GUEvOCNzvsax1sA=
+github.com/TheTitanrain/w32 v0.0.0-20180517000239-4f5cfb03fabf h1:FPsprx82rdrX2jiKyS17BH6IrTmUBYqZa/CXT4uvb+I=
 github.com/TheTitanrain/w32 v0.0.0-20180517000239-4f5cfb03fabf/go.mod h1:peYoMncQljjNS6tZwI9WVyQB3qZS6u79/N3mBOcnd3I=
 github.com/antchfx/xmlquery v1.3.3 h1:HYmadPG0uz8CySdL68rB4DCLKXz2PurCjS3mnkVF4CQ=
 github.com/antchfx/xmlquery v1.3.3/go.mod h1:64w0Xesg2sTaawIdNqMB+7qaW/bSqkQm+ssPaCMWNnc=
