@@ -1,5 +1,6 @@
 github.com/AllenDang/giu v0.4.2 h1:kQrC2odWeJZhyZ+AX5AblWanG8RQZCeS6oUPzI4zJg0=
 github.com/AllenDang/giu v0.4.2/go.mod h1:CVqj0JxKHr+rKLJ/XH2Jp+H/tdI9GUEvOCNzvsax1sA=
+github.com/TheTitanrain/w32 v0.0.0-20180517000239-4f5cfb03fabf/go.mod h1:peYoMncQljjNS6tZwI9WVyQB3qZS6u79/N3mBOcnd3I=
 github.com/antchfx/xmlquery v1.3.3 h1:HYmadPG0uz8CySdL68rB4DCLKXz2PurCjS3mnkVF4CQ=
 github.com/antchfx/xmlquery v1.3.3/go.mod h1:64w0Xesg2sTaawIdNqMB+7qaW/bSqkQm+ssPaCMWNnc=
 github.com/antchfx/xpath v1.1.10 h1:cJ0pOvEdN/WvYXxvRrzQH9x5QWKpzHacYO8qzCcDYAg=
@@ -29,6 +30,8 @@ github.com/saracen/fastzip v0.1.4 h1:oRuna0UT3vetEOPQ7YRwiRquLaDoRirdzv6RR8ore5E
 github.com/saracen/fastzip v0.1.4/go.mod h1:8dezwfssetGEBIs/XRVhw2/CJJEx30nU8Or6jb92S4s=
 github.com/saracen/zipextra v0.0.0-20201205103923-7347a2ee3f10 h1:UdM0Zmjq5MlMEnSu1M+dbJI6/YwlNLiO6p+IJJ3au4A=
 github.com/saracen/zipextra v0.0.0-20201205103923-7347a2ee3f10/go.mod h1:6Zk1rDeZXl7t6qPppqntIzWu6A+k9OYmT1LzehKE6e0=
+github.com/sqweek/dialog v0.0.0-20200911184034-8a3d98e8211d h1:Chay1rwJnXxI27H+pzu7P81BKf647un9GOoRPTdXN18=
+github.com/sqweek/dialog v0.0.0-20200911184034-8a3d98e8211d/go.mod h1:/qNPSY91qTz/8TgHEMioAUc6q7+3SOybeKczHMXFcXw=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/yi-ge/unzip v1.0.2 h1:Mz1+LxvTNV78eWDSyYOitiB+wNS7aSGzDj8KG0SeTaA=

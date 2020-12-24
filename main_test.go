@@ -44,18 +44,14 @@ var audioFileNames = [...]string{
 
 var projectFileNames = [...]string{l9_p1, l9_p2, l10_p1, l10_p2}
 
-func array_contains(arr []string, b interface{}) bool {
-	for _, a := range arr {
-		if a == b {
-			return true
-		}
-	}
-	return false
-}
-
 func callingLine() int {
 	_, _, no, _ := runtime.Caller(2)
 	return no
+}
+
+func absPath(path string) string {
+	fabs, _ := filepath.Abs(path)
+	return fabs
 }
 
 func assert_array_contains(t *testing.T, arr []string, b string) {
@@ -83,23 +79,28 @@ func assert_equal(t *testing.T, a interface{}, b interface{}) {
 	}
 }
 
-func assertAudioFileOwned(t *testing.T, a *audioFile, l *liveFile) {
-	var found bool = false
+func assertAudioFileOwned(t *testing.T, scr *ScanResult, audioFilePath string, liveFilePath string) {
+	audioFilePath, _ = filepath.Abs(audioFilePath)
+	liveFilePath, _ = filepath.Abs(liveFilePath)
 
-	for _, ref := range l.refs {
-		if a == ref {
+	audioFile := scr.audioFiles[audioFilePath]
+	liveFile := scr.liveFiles[liveFilePath]
+
+	found := false
+
+	for _, ref := range liveFile.refs {
+		if audioFile == ref {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("Expected audiofile %s to be owned by livefile %s - line %d", a.pathname, l.pathname, callingLine())
+		t.Errorf("Expected audiofile %s to be owned by livefile %s - line %d", audioFilePath, liveFilePath, callingLine())
 	}
 }
 
-var scr *scanResult = nil
+var scr *ScanResult = nil
 
 func setup(t *testing.T) {
-
 	err := os.RemoveAll("testdata/live-10-p1 Project/Backup/")
 	if err != nil {
 		log.Fatal(err)
@@ -108,18 +109,6 @@ func setup(t *testing.T) {
 	err = os.RemoveAll("testdata/live-10-p2 Project/Backup/")
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	for i := range projectFileNames {
-		fabs, _ := filepath.Abs(projectFileNames[i])
-		projectFileNames[i] = fabs
-	}
-
-	for i := range audioFileNames {
-		if !filepath.IsAbs(audioFileNames[i]) {
-			fabs, _ := filepath.Abs(audioFileNames[i])
-			audioFileNames[i] = fabs
-		}
 	}
 
 	scr = newScanResult("./testdata")
@@ -142,14 +131,24 @@ func TestScanRoot(t *testing.T) {
 		}
 
 		for k := range scr.audioFiles {
-			found := array_contains(audioFileNames[:], k)
+			found := false
+			for _, afn := range audioFileNames {
+				if absPath(afn) == k {
+					found = true
+				}
+			}
 			if !found {
 				t.Errorf("Expected %s to be in found in audioFileNames", k)
 			}
 		}
 
 		for k := range scr.liveFiles {
-			found := array_contains(projectFileNames[:], k)
+			found := false
+			for _, pfn := range projectFileNames {
+				if absPath(pfn) == k {
+					found = true
+				}
+			}
 			if !found {
 				t.Errorf("Expected %s to be in found in projectFileNames", k)
 			}
@@ -163,35 +162,40 @@ func TestScanRoot(t *testing.T) {
 func TestFileRefs(t *testing.T) {
 	setup(t)
 
-	err := scr.walk()
-	if err != nil {
+	if err := scr.walk(); err != nil {
 		t.Error(err)
 	}
 
-	err = scr.scan(make(chan string, 100))
-	if err != nil {
+	if err := scr.scan(make(chan string, 100)); err != nil {
 		t.Error(err)
 	}
 
 	for _, projectFileName := range projectFileNames {
-		livefile := scr.liveFiles[projectFileName]
+		livefile := scr.liveFiles[absPath(projectFileName)]
 
 		switch projectFileName {
 		case l9_p1:
-			assert_equal(t, 2, len(livefile.orphans))
-			assert_array_contains(t, livefile.orphans, l9_p1_orphan)
-			assertAudioFileOwned(t, scr.audioFiles[l9_p2_s1], livefile)
+			assert_equal(t, 1, len(livefile.refs))
+			assertAudioFileOwned(t, scr, l9_p2_s1, projectFileName)
 		case l9_p2:
-			assertAudioFileOwned(t, scr.audioFiles[l9_p2_s1], livefile)
-			assertAudioFileOwned(t, scr.audioFiles[l9_p2_recorded], livefile)
+			assert_equal(t, 2, len(livefile.refs))
+			assertAudioFileOwned(t, scr, l9_p2_s1, projectFileName)
+			assertAudioFileOwned(t, scr, l9_p2_recorded, projectFileName)
 		case l10_p1:
 			assert_equal(t, 0, len(livefile.refs)) // No samples
-			assert_array_contains(t, livefile.orphans, l10_p1_orphan)
 		case l10_p2:
-			assertAudioFileOwned(t, scr.audioFiles[l10_p2_s1], livefile)
-			assertAudioFileOwned(t, scr.audioFiles[l10_p2_recorded], livefile)
+			assert_equal(t, 2, len(livefile.refs))
+			assertAudioFileOwned(t, scr, l10_p2_s1, projectFileName)
+			assertAudioFileOwned(t, scr, l10_p2_recorded, projectFileName)
+		default:
+			t.Errorf("%s missing case", projectFileName)
 		}
 	}
+
+	if len(scr.audioFiles[absPath(an_audio_file)].refs) != 0 {
+		t.Errorf("%s should be orphan", an_audio_file)
+	}
+
 	teardown()
 }
 
@@ -204,42 +208,8 @@ func TestBuildFileRefDir(t *testing.T) {
 	assert_equal(t, "/usr/local/projects/project1/foo/bar/joe/sample1.wav", dir)
 }
 
-func TestAll(t *testing.T) {
-	setup(t)
-
-	/* for _, audioFile := range scr.audioFiles {
-		fmt.Println(audioFile.pathname)
-		if len(audioFile.refs) == 0 {
-			fmt.Println(" No refs")
-		} else {
-			for _, ref := range audioFile.refs {
-				fmt.Printf(" %s\n", (*ref).pathname)
-			}
-		}
-	}
-	println("----------------------------------------------")
-	for _, liveFile := range scr.liveFiles {
-		fmt.Println(liveFile.pathname)
-		if len(liveFile.refs) == 0 {
-			fmt.Println(" No refs")
-		} else {
-			for _, ref := range liveFile.refs {
-				fmt.Printf(" %s\n", (*ref).pathname)
-			}
-		}
-	}
-
-	if len(scr.audioFiles[an_audio_file].refs) != 0 {
-		t.Errorf("%s should be orphan", an_audio_file)
-	}
-
-	if len(scr.audioFiles[l9_p2_orphan].refs) != 0 {
-		t.Errorf("%s should be orphan", an_audio_file)
-	}
-
-	if len(scr.audioFiles[l10_p2_orphan].refs) != 0 {
-		t.Errorf("%s should be orphan", an_audio_file)
-	} */
-
-	teardown()
+func TestAsMain(t *testing.T) {
+	appCtx.scanRootPath = rootPathName
+	startScan(TUI)
+	//list()
 }

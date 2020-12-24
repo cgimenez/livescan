@@ -3,4 +3,4 @@ misc
 *.code-workspace
 livescan
 bin
-
+.history

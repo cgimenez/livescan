@@ -2,46 +2,51 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
+
+	imgui "github.com/AllenDang/giu/imgui"
 )
 
-const rootPathName string = "/Volumes/Work1/Musique/Génériques Pour la Nouvelle Télévision/Compos/Bloc 4"
+const rootPathName string = "/Volumes/Work1/Musique/2020"
 
-func startScan() {
-	sc := newScanResult(rootPathName)
+const (
+	IDLE = iota
+	RUNNING
+	DONE
 
-	log.Println("Finding files")
-	err := sc.walk()
-	if err != nil {
-		panic(err)
-	}
+	GUI
+	TUI
+)
 
-	ch := make(chan string, 100)
-	go func() {
-		if err = sc.scan(ch); err != nil {
-			panic(err)
-		}
-	}()
-
-	done := false
-	for !done {
-		msg, more := <-ch
-		if more {
-			log.Println(msg)
-		} else {
-			fmt.Println("Scan done")
-			done = true
-		}
-	}
+type AppCtx struct {
+	scanRootPath string
+	libRootPath  string
+	scanResult   *ScanResult
+	messages     []string
+	font         imgui.Font
+	scanStatus   int
 }
+
+func (ctx *AppCtx) scanStatusToString() string {
+	switch ctx.scanStatus {
+	case IDLE:
+		return "IDLE"
+	case RUNNING:
+		return "Running"
+	case DONE:
+		return "Done"
+	}
+	return "Unknown status"
+}
+
+var appCtx AppCtx
 
 func main() {
 	noGUI := flag.Bool("no-gui", false, "disable GUI")
 	flag.Parse()
 
 	if *noGUI {
-		startScan()
+		startScan(TUI)
+		//list()
 	} else {
 		setupGUI()
 	}

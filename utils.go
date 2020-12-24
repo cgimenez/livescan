@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 // From https://yourbasic.org/golang/formatting-byte-size-to-human-readable-format/
 func ByteCountSI(b int64) string {
@@ -15,4 +18,21 @@ func ByteCountSI(b int64) string {
 	}
 	return fmt.Sprintf("%.1f %cB",
 		float64(b)/float64(div), "kMGTPE"[exp])
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
+func isIconFile(filename string) bool {
+	var a = [...]byte{73, 99, 111, 110, 13}
+	var b = []byte(filename)
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
