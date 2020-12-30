@@ -1,8 +1,11 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
+
+	imgui "github.com/AllenDang/giu/imgui"
 )
 
 // From https://yourbasic.org/golang/formatting-byte-size-to-human-readable-format/
@@ -35,4 +38,25 @@ func isIconFile(filename string) bool {
 		}
 	}
 	return true
+}
+
+func RGBA(r, g, b, a int) imgui.Vec4 {
+	return imgui.Vec4{X: float32(r) / 255, Y: float32(g) / 255, Z: float32(b) / 255, W: float32(a) / 255}
+}
+
+func newDBCnx() (*sql.DB, error) {
+	var cnx *sql.DB
+	var db_path string
+	var err error
+
+	if appCtx.env == TEST {
+		db_path = "testdata/db.sqlite"
+	} else {
+		db_path = "files/db.sqlite"
+	}
+	cnx, err = sql.Open("sqlite3", db_path)
+	if err != nil {
+		return nil, err
+	}
+	return cnx, nil
 }

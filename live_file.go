@@ -10,6 +10,9 @@ import (
 	"github.com/antchfx/xmlquery"
 )
 
+//
+// Unzip the file and returns content as a string
+//
 func (lifefile *LiveFile) gUnZipFile() (string, error) {
 	f, err := os.Open(lifefile.pathname)
 	if err != nil {
@@ -59,30 +62,13 @@ func buildFileRefDir(lifefile_pathname string, sample_filename string, hasRelati
 	return dir
 }
 
-func buildPath(base string, directories []string, sample_filename string, hasRelativePath bool) string {
-	var dir string = base
-
-	if !hasRelativePath {
-		dir = "/"
-	}
-	for _, d := range directories {
-		if d == "" {
-			d = ".."
-		}
-		dir = filepath.Join(dir, d)
-	}
-	dir, _ = filepath.Abs(filepath.Join(dir, sample_filename))
-
-	return dir
-}
-
 func findInProject(base string, directories []string, sample_filename string) (string, bool) {
 	var concat_dirs string
 
 	for i := range directories {
 		concat_dirs = directories[len(directories)-1-i] + string(os.PathSeparator) + concat_dirs
 		abspath, _ := filepath.Abs(filepath.Join(base, concat_dirs, sample_filename))
-		if fileExists(abspath) {
+		if appCtx.fileExistsFn(abspath) {
 			return abspath, true
 		}
 	}
@@ -109,7 +95,7 @@ func findOutsideProject(base string, directories []string, sample_filename strin
 		}
 		concat_dirs = filepath.Join(concat_dirs, d)
 		abspath, _ := filepath.Abs(filepath.Join(concat_dirs, sample_filename))
-		if fileExists(abspath) {
+		if appCtx.fileExistsFn(abspath) {
 			return abspath, true
 		}
 	}
@@ -166,7 +152,7 @@ func (livefile *LiveFile) analyzeFileRefs(scanResult *ScanResult, content string
 				audiofile.refs = append(audiofile.refs, livefile)
 				livefile.refs = append(livefile.refs, audiofile)
 			} else {
-				livefile.externalrefs = append(livefile.externalrefs, abspath)
+				livefile.outsiderefs = append(livefile.outsiderefs, abspath)
 			}
 		}
 
