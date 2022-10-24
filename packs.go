@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -12,34 +11,18 @@ import (
 
 // Ableton Packs dir already scanned ?
 func isLivePacksDBScanned() (bool, error) {
-	var cnx *sql.DB
-	var err error
-
-	if !fileExists("files/db.sqlite") {
-		dbFile, err := os.Create("files/db.sqlite")
-		if err != nil {
-			return false, err
-		}
-		defer dbFile.Close()
-	}
-
-	if cnx, err = newDBCnx(); err != nil {
-		return false, err
-	}
-	defer cnx.Close()
-
 	var count int
 	stmt := "SELECT COUNT(*) FROM sqlite_master WHERE name ='packs_samples' and type='table'"
-	_ = cnx.QueryRow(stmt).Scan(&count)
+	_ = appCtx.dbCnx.QueryRow(stmt).Scan(&count)
 	if count == 0 {
 		stmt = "CREATE TABLE packs_samples (directory TEXT, name TEXT)"
-		if _, err := cnx.Exec(stmt); err != nil {
+		if _, err := appCtx.dbCnx.Exec(stmt); err != nil {
 			return false, err
 		}
 		return false, nil
 	} else {
 		stmt = "SELECT COUNT(*) FROM packs_samples"
-		_ = cnx.QueryRow(stmt).Scan(&count)
+		_ = appCtx.dbCnx.QueryRow(stmt).Scan(&count)
 		if count == 0 {
 			return false, nil
 		}
@@ -48,19 +31,13 @@ func isLivePacksDBScanned() (bool, error) {
 }
 
 func scanLivePacks() error {
-	var cnx *sql.DB
 	var err error
 
 	if appCtx.libRootPath == "" {
 		return errors.New("libRootPath is not set")
 	}
 
-	if cnx, err = newDBCnx(); err != nil {
-		return err
-	}
-	defer cnx.Close()
-
-	if _, err = cnx.Exec("DELETE FROM packs_samples"); err != nil {
+	if _, err = appCtx.dbCnx.Exec("DELETE FROM packs_samples"); err != nil {
 		return err
 	}
 
@@ -76,11 +53,26 @@ func scanLivePacks() error {
 			}
 			switch filepath.Ext(path) {
 			case ".aif", ".wav", ".mp3":
-				if _, err = cnx.Exec("INSERT INTO packs_samples (directory, name) VALUES ((?), (?))", dir, base); err != nil {
+				if _, err = appCtx.dbCnx.Exec("INSERT INTO packs_samples (directory, name) VALUES ((?), (?))", dir, base); err != nil {
 					return err
 				}
 			}
 			return nil
 		})
 	return err
+}
+
+func isSampleInPacks(sample_filename, packName string, dirs []string) (bool, error) {
+	var count int
+	dir := appCtx.libRootPath + "/" + packName
+
+	for _, d := range dirs { // Should loop in reverse, would exec less queries
+		dir += "/" + d
+		stmt := fmt.Sprintf("SELECT COUNT(*) FROM packs_samples WHERE directory = '%s' AND name = '%s'", dir, sample_filename)
+		_ = appCtx.dbCnx.QueryRow(stmt).Scan(&count)
+		if count > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"compress/gzip"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -36,87 +37,7 @@ func (lifefile *LiveFile) gUnZipFile() (string, error) {
 	return string(content), err
 }
 
-func buildFileRefDir(lifefile_pathname string, sample_filename string, hasRelativePath bool, relativePathType string, directories []string) string {
-	var dir string
-
-	if hasRelativePath {
-		switch relativePathType {
-		case "5":
-			dir = appCtx.libRootPath
-		case "6":
-			dir = filepath.Join(appCtx.libRootPath, "User Library")
-		default:
-			dir = filepath.Dir(lifefile_pathname)
-		}
-	} else {
-		dir = "/"
-	}
-	for _, d := range directories {
-		if d == "" {
-			d = ".."
-		}
-		dir = filepath.Join(dir, d)
-	}
-	dir, _ = filepath.Abs(filepath.Join(dir, sample_filename))
-
-	return dir
-}
-
-func findInProject(base string, directories []string, sample_filename string) (string, bool) {
-	var concat_dirs string
-
-	for i := range directories {
-		concat_dirs = directories[len(directories)-1-i] + string(os.PathSeparator) + concat_dirs
-		abspath, _ := filepath.Abs(filepath.Join(base, concat_dirs, sample_filename))
-		if appCtx.fileExistsFn(abspath) {
-			return abspath, true
-		}
-	}
-	return "", false
-}
-
-func findOutsideProject(base string, directories []string, sample_filename string, hasRelativePath bool, relativePathType string) (string, bool) {
-	var concat_dirs string
-
-	if hasRelativePath {
-		switch relativePathType {
-		case "5":
-			concat_dirs = appCtx.libRootPath
-		case "6":
-			concat_dirs = filepath.Join(appCtx.libRootPath, "User Library")
-		}
-	} else {
-		concat_dirs = string(os.PathSeparator)
-	}
-
-	for _, d := range directories {
-		if d == "" {
-			d = ".."
-		}
-		concat_dirs = filepath.Join(concat_dirs, d)
-		abspath, _ := filepath.Abs(filepath.Join(concat_dirs, sample_filename))
-		if appCtx.fileExistsFn(abspath) {
-			return abspath, true
-		}
-	}
-	return "", false
-}
-
-func buildSamplePath(base string, directories []string, sample_filename string) string {
-	var dir string = base
-
-	for _, d := range directories {
-		if d == "" {
-			d = ".."
-		}
-		dir = filepath.Join(dir, d)
-	}
-	dir, _ = filepath.Abs(filepath.Join(dir, sample_filename))
-
-	return dir
-}
-
-func getPathElements(fileRef *xmlquery.Node, xpath string) []string {
+func getXMLPathElements(fileRef *xmlquery.Node, xpath string) []string {
 	var dirs []string
 	for _, relPathElement := range xmlquery.Find(fileRef, xpath) {
 		d := relPathElement.SelectAttr("Dir")
@@ -125,50 +46,93 @@ func getPathElements(fileRef *xmlquery.Node, xpath string) []string {
 	return dirs
 }
 
+func dirsToPath(dirs []string) string {
+	res := ""
+	for _, d := range dirs {
+		if d == "" {
+			res += ".."
+		} else {
+			res += d
+		}
+		res += "/"
+	}
+	return res
+}
+
 func (livefile *LiveFile) analyzeFileRefs(scanResult *ScanResult, content string) error {
-	var abspath string
-	var foundInProject, foundOutsideProject bool
+	handledSamples := make(map[string]bool)
+	localSamples := make(map[string]bool)
 
 	doc, err := xmlquery.Parse(strings.NewReader(content))
 	if err != nil {
 		return err
 	}
 
-	for _, fileRef := range xmlquery.Find(doc, "//SampleRef//FileRef") {
+	err = filepath.Walk(filepath.Dir(livefile.pathname),
+		func(path string, info os.FileInfo, err error) error {
+			switch filepath.Ext(path) {
+			case ".aif", ".aiff", ".wav", ".mp3", ".mov", ".mp4":
+				localSamples[filepath.Base(path)] = true
+			}
+			return nil
+		})
+
+	fileRefs := xmlquery.Find(doc, "//SampleRef//FileRef")
+	for _, fileRef := range fileRefs {
 		sampleFilename := xmlquery.Find(fileRef, "//Name")[0].SelectAttr("Value")
 		hasRelativePath := xmlquery.Find(fileRef, "//HasRelativePath")[0].SelectAttr("Value") == "true"
 		relativePathType := xmlquery.Find(fileRef, "//RelativePathType")[0].SelectAttr("Value")
+		livePackNameElem := fileRef.SelectElement("LivePackName")
 
 		var dirs []string
 		if hasRelativePath {
-			dirs = getPathElements(fileRef, "//RelativePath//RelativePathElement")
+			dirs = getXMLPathElements(fileRef, "//RelativePath//RelativePathElement")
 		} else {
-			dirs = getPathElements(fileRef, "//SearchHint//PathHint//RelativePathElement")
+			dirs = getXMLPathElements(fileRef, "//SearchHint//PathHint//RelativePathElement")
 		}
 
-		var handleFound = func() {
-			audiofile, ok := scanResult.audioFiles[abspath]
-			if ok {
-				audiofile.refs = append(audiofile.refs, livefile)
-				livefile.refs = append(livefile.refs, audiofile)
-			} else {
-				livefile.outsiderefs = append(livefile.outsiderefs, abspath)
+		livePackName := ""
+		if livePackNameElem != nil {
+			livePackName = livePackNameElem.SelectAttr("Value")
+		}
+
+		fullpath, _ := filepath.Abs(filepath.Dir(livefile.pathname) + "/" + dirsToPath(dirs) + sampleFilename)
+
+		if handledSamples[fullpath] {
+			continue
+		}
+
+		switch relativePathType {
+		case "0":
+		case "2":
+		case "1", "3":
+			if relativePathType == "1" {
+				fmt.Println(dirs)
+				fmt.Println(sampleFilename, fullpath)
+				fmt.Println(getXMLPathElements(fileRef, "//SearchHint//PathHint//RelativePathElement"))
+				fmt.Println("***")
 			}
+			foundLocal := localSamples[sampleFilename]
+			found := scanResult.audioFiles[fullpath]
+			if appCtx.fileExistsFn(fullpath) {
+				audiofile, ok := scanResult.audioFiles[fullpath]
+				//fmt.Println(audiofile.pathname, ok)
+				if ok {
+					audiofile.refs = append(audiofile.refs, livefile)
+					livefile.refs = append(livefile.refs, audiofile)
+				} else {
+					livefile.outsiderefs = append(livefile.outsiderefs, fullpath)
+				}
+			} else {
+				livefile.missing[fullpath] = true
+			}
+		case "5", "6":
+			UNUSED(livePackName)
+			//isSampleInPacks(sampleFilename, livePackName, dirs)
 		}
 
-		abspath, foundInProject = findInProject(filepath.Dir(livefile.pathname), dirs, sampleFilename)
-		if foundInProject {
-			handleFound()
-		}
-
-		abspath, foundOutsideProject = findOutsideProject(filepath.Dir(livefile.pathname), dirs, sampleFilename, hasRelativePath, relativePathType)
-		if foundOutsideProject {
-			handleFound()
-		}
-
-		if !foundInProject && !foundOutsideProject {
-			livefile.missing = append(livefile.missing, buildSamplePath(filepath.Dir(livefile.pathname), dirs, sampleFilename))
-		}
+		handledSamples[fullpath] = true
 	}
+
 	return nil
 }

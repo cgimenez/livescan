@@ -60,3 +60,5 @@ func newDBCnx() (*sql.DB, error) {
 	}
 	return cnx, nil
 }
+
+func UNUSED(x ...interface{}) {}

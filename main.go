@@ -1,18 +1,20 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 
 	imgui "github.com/AllenDang/giu/imgui"
 )
 
-const rootPathName string = "/Volumes/Work1/Musique/2019-Curated-2"
-
 const (
 	IDLE = iota
 	RUNNING
 	DONE
+
+	STATE_PACKS
+	STATE_SCAN
 
 	GUI
 	TUI
@@ -31,6 +33,7 @@ type AppCtx struct {
 	deleteEnabled bool
 	env           int
 	fileExistsFn  func(string) bool
+	dbCnx         *sql.DB
 }
 
 func (ctx *AppCtx) scanStatusToString() string {
@@ -45,23 +48,31 @@ func (ctx *AppCtx) scanStatusToString() string {
 	return "Unknown status"
 }
 
-var appCtx AppCtx
+func setAppCtxDefaults() {
+	var err error
 
-func main() {
-	appCtx.scanRootPath = rootPathName
+	appCtx.scanRootPath = "/Volumes/Work1/Musique/Génériques Pour la Nouvelle Télévision/Compos/Bloc 4"
 	appCtx.libRootPath = "/Volumes/Work1/Musique/Sound banks/Packs Live"
 	appCtx.deleteEnabled = false
 	appCtx.fileExistsFn = fileExists
+	if appCtx.dbCnx, err = newDBCnx(); err != nil {
+		panic(err)
+	}
+}
+
+var appCtx AppCtx
+
+func main() {
+	setAppCtxDefaults()
+	defer appCtx.dbCnx.Close()
+
 	runMode := flag.String("runmode", "", "tui, debug or nothing")
 	flag.Parse()
 
 	switch *runMode {
 	case "tui":
 		startScan(TUI)
-		list()
-	case "debug":
-		appCtx.scanResult = newScanResult(appCtx.scanRootPath)
-		appCtx.scanResult.debug()
+		appCtx.scanResult.list()
 	case "scanpacks":
 		_, err := isLivePacksDBScanned()
 		if err != nil {

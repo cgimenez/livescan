@@ -33,13 +33,12 @@ func assert_array_contains(t *testing.T, arr []string, b string) {
 func assert_not_nil(t *testing.T, v interface{}) {
 	if v == nil || reflect.ValueOf(v).IsNil() {
 		t.Errorf("should not be nil")
-		//panic("should not be nil")
 	}
 }
 
 func assert_equal(t *testing.T, a interface{}, b interface{}) {
 	if a != b {
-		t.Errorf("%v not equal to %v - line %d", a, b, callingLine())
+		t.Errorf("expected %v got %v - line %d", a, b, callingLine())
 	}
 }
 
@@ -103,23 +102,76 @@ var liveFile *LiveFile
 
 func setup() {
 	scr = newScanResult("./testdata")
-	liveFile = &LiveFile{"test.als", make([]*AudioFile, 0), make([]string, 0), make([]string, 0)}
+	//liveFile = &LiveFile{"test.als", make([]*AudioFile, 0), make([]string, 0), make(map[string]bool)}
 }
 
 func teardown() {
 }
 
-func TestSamplesRefs(t *testing.T) {
+func TestAnalyzeFileRefs(t *testing.T) {
 	t.Run("Sample inside project", func(t *testing.T) {
 		setup()
 		appCtx.fileExistsFn = func(filename string) bool {
-			println(filename)
-			return true
+			if filename == absPath("Samples/Recorded/s1.wav") {
+				return true
+			} else {
+				return false
+			}
 		}
+		samplePath := absPath("Samples/Recorded/s1.wav")
+		scr.audioFiles[samplePath] = &AudioFile{samplePath, 0, make([]*LiveFile, 0)}
+		scr.liveFiles["foo.als"] = &LiveFile{"foo.als", make([]*AudioFile, 0), make([]string, 0), make(map[string]bool)}
 		xml := buildXML([]string{"Samples", "Recorded"}, "s1.wav", true, "3")
-		println(xml)
 		liveFile.analyzeFileRefs(scr, xml)
+		assert_equal(t, 1, len(liveFile.refs))
+		assert_equal(t, liveFile.refs[0], scr.audioFiles[samplePath])
 		teardown()
 	})
 
+	t.Run("Sample outside and relative to project", func(t *testing.T) {
+		setup()
+		appCtx.fileExistsFn = func(filename string) bool {
+			if filename == absPath("../../Somewhere/Samples/Recorded/s1.wav") {
+				return true
+			} else {
+				return false
+			}
+		}
+		samplePath := absPath("../../Somewhere/Samples/Recorded/s1.wav")
+		scr.audioFiles[samplePath] = &AudioFile{samplePath, 0, make([]*LiveFile, 0)}
+		scr.liveFiles["foo.als"] = &LiveFile{"foo.als", make([]*AudioFile, 0), make([]string, 0), make(map[string]bool)}
+		xml := buildXML([]string{"", "", "Somewhere", "Samples", "Recorded"}, "s1.wav", true, "3")
+		liveFile.analyzeFileRefs(scr, xml)
+		assert_equal(t, 1, len(liveFile.refs))
+		assert_equal(t, liveFile.refs[0], scr.audioFiles[samplePath])
+		teardown()
+	})
+}
+
+func TestPacks(t *testing.T) {
+	t.Run("Find sample in packs", func(t *testing.T) {
+		var err error
+
+		setup()
+		appCtx.env = TEST
+		setAppCtxDefaults()
+		appCtx.libRootPath = "/Somewhere/Packs Live"
+		isLivePacksDBScanned()
+		if _, err = appCtx.dbCnx.Exec("DELETE FROM packs_samples"); err != nil {
+			t.Error(err)
+		}
+
+		data := map[string]string{"pack1/metal/clap/samples/processed": "s1.wav", "pack2/plastic/boom/samples/recorded": "s1.wav"}
+		for p, s := range data {
+			if _, err = appCtx.dbCnx.Exec("INSERT INTO packs_samples (directory, name) VALUES ((?), (?))", appCtx.libRootPath+"/"+p, s); err != nil {
+				t.Error(err)
+			}
+		}
+
+		b, _ := isSampleInPacks("s1.wav", "pack1", []string{"metal", "clap", "samples", "processed"})
+		assert_equal(t, true, b)
+		b, _ = isSampleInPacks("s2.wav", "pack1", []string{"metal", "clap", "samples", "processed"})
+		assert_equal(t, false, b)
+		teardown()
+	})
 }

@@ -3,22 +3,19 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strings"
 
 	"github.com/AllenDang/giu"
-	"github.com/antchfx/xmlquery"
 )
 
 type LiveFile struct {
 	pathname    string
 	refs        []*AudioFile
 	outsiderefs []string
-	missing     []string
+	missing     map[string]bool
 }
 
 type AudioFile struct {
@@ -68,7 +65,7 @@ func newScanResult(rootPath string) *ScanResult {
 //
 // Scan the directory provided by the user to find all .als and audio files
 //
-func (scanResult *ScanResult) walk() error {
+func (scanResult *ScanResult) walk(channel chan string) error {
 
 	if scanResult.rootPath == "" {
 		return errors.New("rootPath is not set")
@@ -80,16 +77,19 @@ func (scanResult *ScanResult) walk() error {
 			if match { // Skip live 10 backups
 				return filepath.SkipDir
 			}
+			if info.IsDir() {
+				channel <- fmt.Sprintf("Scanning dir %s", path)
+			}
 			path, _ = filepath.Abs(path)
 			base := filepath.Base(path)
 			if err != nil && !isIconFile(base) { // Icon? files cause problems under Windows
 				return fmt.Errorf("name %s: %v", base, err)
 			}
 			switch filepath.Ext(path) {
-			case ".aif", ".wav", ".mp3":
+			case ".aif", ".aiff", ".wav", ".mp3", ".mov", ".mp4":
 				scanResult.audioFiles[path] = &AudioFile{path, info.Size(), make([]*LiveFile, 0)}
 			case ".als":
-				scanResult.liveFiles[path] = &LiveFile{path, make([]*AudioFile, 0), make([]string, 0), make([]string, 0)}
+				scanResult.liveFiles[path] = &LiveFile{path, make([]*AudioFile, 0), make([]string, 0), make(map[string]bool)}
 			}
 			return nil
 		})
@@ -128,7 +128,7 @@ func startScan(uiMode int) {
 
 	ch := make(chan string, 100)
 	go func() {
-		if err := appCtx.scanResult.walk(); err != nil {
+		if err := appCtx.scanResult.walk(ch); err != nil {
 			panic(err)
 		}
 		if err := appCtx.scanResult.scan(ch); err != nil {
@@ -143,7 +143,7 @@ func startScan(uiMode int) {
 			if uiMode == GUI {
 				appCtx.messages = append(appCtx.messages, msg)
 			} else {
-				log.Println(msg)
+				fmt.Println(msg)
 			}
 		} else {
 			appCtx.scanStatus = DONE
@@ -154,80 +154,28 @@ func startScan(uiMode int) {
 	}
 }
 
-func (scanResult *ScanResult) debug() {
-	/*
-		The logic seems to be
-		relativePathType 0 && HasRelativePath false : ? Missing sample ?
-		relativePathType 1 && HasRelativePath true  : sample is relative to project but outside of project directory [but can appear twice in the project, with 3 / true OR 6 / true]
-		relativePathType 2 && HasRelativePath true  : ? Missing sample ?
-		relativePathType 3 && HasRelativePath true  : sample is under project's Samples dir
-		relativePathType 5 && HasRelativePath true  : sample is in the Ableton Live's packs directory but pathname might be broken (must search in packs)
-		relativePathType 6 && HasRelativePath true  : sample is in User Pack directory but sometimes is under project's Samples dir
-
-		In any case, if the audio file is present under Samples project dir, it must have precedence
-	*/
-	var content string
-	var err error
-
-	if err = appCtx.scanResult.walk(); err != nil {
-		panic(err)
-	}
-	for _, file := range scanResult.liveFiles {
-		content, err = file.gUnZipFile()
-		if err != nil {
-			fmt.Println(err)
-		} else {
-			doc, err := xmlquery.Parse(strings.NewReader(content))
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			for _, fileRef := range xmlquery.Find(doc, "//SampleRef//FileRef") {
-				sampleFilename := xmlquery.Find(fileRef, "//Name")[0].SelectAttr("Value")
-				hasRelativePath := xmlquery.Find(fileRef, "//HasRelativePath")[0].SelectAttr("Value") == "true"
-				relativePathType := xmlquery.Find(fileRef, "//RelativePathType")[0].SelectAttr("Value")
-				livePackName := xmlquery.Find(fileRef, "//LivePackName")[0].SelectAttr("Value")
-				livePackID := xmlquery.Find(fileRef, "//LivePackId")[0].SelectAttr("Value")
-
-				var rel_dirs, abs_dirs []string
-				rel_dirs = getPathElements(fileRef, "//RelativePath//RelativePathElement")
-				abs_dirs = getPathElements(fileRef, "//SearchHint//PathHint//RelativePathElement")
-				rel_path, abs_path := "", ""
-				for i := range rel_dirs {
-					if rel_dirs[i] == "" {
-						rel_path += "../"
-					} else {
-						rel_path += rel_dirs[i] + "/"
-					}
-				}
-				for i := range abs_dirs {
-					abs_path += abs_dirs[i] + "/"
-				}
-				fmt.Printf("%s\t%s\t%s\t%t\t%s\t%s\t%s\t%s\n", file.pathname, sampleFilename, relativePathType, hasRelativePath, livePackName, livePackID, rel_path, abs_path)
-			}
-		}
-	}
-}
-
 //
 //
-func list() {
-	if len(appCtx.scanResult.audioFiles) > 0 {
-		log.Println()
-		log.Println("Orphan audio files :")
-		for _, audiofile := range appCtx.scanResult.audioFiles {
-			log.Printf(" %s\n", audiofile.pathname)
+func (scanResult *ScanResult) list() {
+	if len(scanResult.audioFiles) > 0 {
+		fmt.Println("AUDIO FILES FOUND")
+		for _, audiofile := range scanResult.audioFiles {
+			if len(audiofile.refs) == 0 {
+				fmt.Print("ORPHAN : ")
+			}
+			fmt.Println(audiofile.pathname)
 		}
 	}
 
+	//fmt.Println(appCtx.scanResult.audioFiles)
 	for _, livefile := range appCtx.scanResult.liveFiles {
-		log.Println()
-		log.Println(livefile.pathname)
+		fmt.Println()
+		fmt.Println(livefile.pathname)
 		for _, ref := range livefile.refs {
-			log.Println(" Ref :", ref.pathname)
+			fmt.Println(" REF :", ref.pathname)
 		}
-		for _, missing := range livefile.missing {
-			log.Println(" MIS :", missing)
+		for key, _ := range livefile.missing {
+			fmt.Println(" MIS :", key)
 		}
 	}
 }

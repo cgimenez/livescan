@@ -80,8 +80,8 @@ func liveFilesTab() {
 					}
 					imgui.SetNextItemOpen(true, imgui.ConditionFirstUseEver)
 					if imgui.TreeNode("Missing") {
-						for _, missing := range liveFile.missing {
-							imgui.Text("Missing : " + missing)
+						for key, _ := range liveFile.missing {
+							imgui.Text("Missing : " + key)
 						}
 						imgui.TreePop()
 					}
